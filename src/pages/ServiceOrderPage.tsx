@@ -9,6 +9,7 @@ import { getNextStage } from '../config/serviceStages';
 function ServiceOrderPage() {
   const { id } = useParams<{ id: string }>();
   const [order, setOrder] = useState<any>(null);
+  const [booking, setBooking] = useState<any>(null);
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(true);
   const [success, setSuccess] = useState('');
@@ -24,6 +25,12 @@ function ServiceOrderPage() {
       ]);
       setRole(attrs['custom:role'] || 'customer');
       setOrder(orderRes.data);
+
+      // Fetch booking for service type
+      if (orderRes.data?.bookingId) {
+        const bookingRes = await client.models.Booking.get({ id: orderRes.data.bookingId });
+        setBooking(bookingRes.data);
+      }
     } catch (error) {
       console.error('Failed to load order:', error);
     } finally {
@@ -33,7 +40,7 @@ function ServiceOrderPage() {
 
   const advanceStage = async () => {
     if (!order) return;
-    const serviceType = order.serviceType || 'other';
+    const serviceType = booking?.serviceType || 'other';
     const nextStage = getNextStage(serviceType, order.currentStage);
     if (!nextStage) return;
 
@@ -81,7 +88,7 @@ function ServiceOrderPage() {
   if (!order) return <div className="alert alert-error">Service order not found.</div>;
 
   const isEngineer = role === 'engineer' || role === 'admin';
-  const serviceType = order.serviceType || 'other';
+  const serviceType = booking?.serviceType || 'other';
 
   return (
     <div className="service-order-page">
@@ -90,7 +97,7 @@ function ServiceOrderPage() {
       {success && <div className="alert alert-success">{success}</div>}
 
       <div className="card">
-        <h2>Order #{order.id.slice(0, 8)}</h2>
+        <h2>{serviceType.replace(/_/g, ' ')}</h2>
         <p>Stage: <strong>{(order.currentStage || '').replace(/_/g, ' ')}</strong></p>
         <p>Priority: <span className={`priority-badge priority-${order.priority || 'normal'}`}>{order.priority || 'normal'}</span></p>
         {order.startedAt && <p>Started: {new Date(order.startedAt).toLocaleString()}</p>}

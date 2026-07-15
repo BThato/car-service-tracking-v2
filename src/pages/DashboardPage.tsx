@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { fetchUserAttributes } from 'aws-amplify/auth';
 import { client } from '../client';
 import StageTracker from '../components/StageTracker';
 import SkeletonCard from '../components/SkeletonCard';
 
 function DashboardPage() {
+  const navigate = useNavigate();
   const [firstName, setFirstName] = useState('');
   const [role, setRole] = useState('customer');
   const [serviceOrders, setServiceOrders] = useState<any[]>([]);
@@ -117,13 +118,22 @@ function DashboardPage() {
                 </tr>
               </thead>
               <tbody>
-                {bookings.slice(0, 5).map(booking => (
-                  <tr key={booking.id}>
-                    <td>{(booking.serviceType || '').replace(/_/g, ' ')}</td>
-                    <td>{booking.preferredDate ? new Date(booking.preferredDate).toLocaleDateString() : '-'}</td>
-                    <td><span className={`status-badge status-${booking.status}`}>{booking.status}</span></td>
-                  </tr>
-                ))}
+                {bookings.slice(0, 5).map(booking => {
+                  // Find the service order for this booking to link to tracking
+                  const relatedOrder = serviceOrders.find(o => o.bookingId === booking.id);
+                  const trackingLink = relatedOrder ? `/tracking/${relatedOrder.id}` : null;
+                  return (
+                    <tr
+                      key={booking.id}
+                      onClick={() => trackingLink && navigate(trackingLink)}
+                      style={{ cursor: trackingLink ? 'pointer' : 'default' }}
+                    >
+                      <td>{(booking.serviceType || '').replace(/_/g, ' ')}</td>
+                      <td>{booking.preferredDate ? new Date(booking.preferredDate).toLocaleDateString() : '-'}</td>
+                      <td><span className={`status-badge status-${booking.status}`}>{booking.status}</span></td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

@@ -7,7 +7,7 @@ import LoadingSpinner from '../components/LoadingSpinner';
 
 function EngineerDashboard() {
   const [orders, setOrders] = useState<any[]>([]);
-  const [pendingBookings, setPendingBookings] = useState<any[]>([]);
+  const [allBookings, setAllBookings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState('');
@@ -18,8 +18,7 @@ function EngineerDashboard() {
   useEffect(() => {
     const sub = client.models.Booking.observeQuery().subscribe({
       next: ({ items }) => {
-        const pending = items.filter((b: any) => b.status === 'pending');
-        setPendingBookings(pending);
+        setAllBookings(items);
       },
       error: (err) => console.error('Booking observe error:', err),
     });
@@ -109,6 +108,12 @@ function EngineerDashboard() {
 
   if (loading) return <LoadingSpinner message="Loading work queue..." />;
 
+  const pendingBookings = allBookings.filter((b: any) => b.status === 'pending');
+  const bookingServiceTypeMap: Record<string, string> = {};
+  allBookings.forEach((b: any) => { bookingServiceTypeMap[b.id] = b.serviceType || 'other'; });
+
+  const getOrderServiceType = (order: any) => bookingServiceTypeMap[order.bookingId] || 'other';
+
   const myOrders = orders.filter(o => o.assignedEngineerId === currentUserId && o.currentStage !== 'completed');
   const unassignedOrders = orders.filter(o => !o.assignedEngineerId);
   const completedOrders = orders.filter(o => o.currentStage === 'completed');
@@ -197,11 +202,11 @@ function EngineerDashboard() {
                   <span className="stage-label">Current: {(order.currentStage || '').replace(/_/g, ' ')}</span>
                   {order.currentStage !== 'completed' && (
                     <button
-                      onClick={() => advanceStage(order.id, order.currentStage, order.serviceType || 'other')}
+                      onClick={() => advanceStage(order.id, order.currentStage, getOrderServiceType(order))}
                       disabled={updating === order.id}
                       className="btn btn-primary btn-sm"
                     >
-                      {updating === order.id ? 'Updating...' : `Advance to ${getNextStage(order.serviceType || 'other', order.currentStage)?.replace(/_/g, ' ') || ''}`}
+                      {updating === order.id ? 'Updating...' : `Advance to ${getNextStage(getOrderServiceType(order), order.currentStage)?.replace(/_/g, ' ') || ''}`}
                     </button>
                   )}
                 </div>

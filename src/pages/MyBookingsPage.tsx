@@ -38,6 +38,14 @@ function MyBookingsPage() {
     if (!confirm('Are you sure you want to cancel this booking?')) return;
     setError('');
     try {
+      // Re-fetch to check current status (in case engineer already accepted)
+      const { data: current } = await client.models.Booking.get({ id });
+      if (current?.status !== 'pending') {
+        setError('This booking has already been accepted and cannot be cancelled.');
+        // Refresh the list to show updated status
+        loadBookings();
+        return;
+      }
       await client.models.Booking.update({
         id,
         status: 'cancelled' as any,

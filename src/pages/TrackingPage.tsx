@@ -93,8 +93,13 @@ function TrackingPage() {
       if (order.currentStage === 'queued') {
         updateData.startedAt = new Date().toISOString();
       }
-      await client.models.ServiceOrder.update(updateData);
+      const result = await client.models.ServiceOrder.update(updateData);
+      if (result.errors) {
+        console.error('Update errors:', result.errors);
+      }
       setAdvanceNotes('');
+      // Refresh data in case observeQuery doesn't pick it up immediately
+      loadData();
     } catch (error) {
       console.error('Failed to advance stage:', error);
     } finally {
