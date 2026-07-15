@@ -18,15 +18,15 @@ const schema = a.schema({
     bookings: a.hasMany('Booking', 'customerId'),
   })
     .authorization((allow) => [
-      allow.owner(),
+      allow.ownerDefinedIn('cognitoId'),
       allow.groups(['admin']).to(['read', 'create', 'update', 'delete']),
       allow.groups(['engineer']).to(['read']),
     ]),
 
   // ========== VEHICLE ==========
   Vehicle: a.model({
-    ownerId: a.id().required(),
-    owner: a.belongsTo('User', 'ownerId'),
+    ownerId: a.id(),
+    vehicleOwner: a.belongsTo('User', 'ownerId'),
     make: a.string().required(),
     model: a.string().required(),
     year: a.integer().required(),
@@ -36,13 +36,13 @@ const schema = a.schema({
     mileage: a.integer(),
   })
     .authorization((allow) => [
-      allow.owner(),
+      allow.ownerDefinedIn('ownerId'),
       allow.groups(['admin', 'engineer']).to(['read']),
     ]),
 
   // ========== BOOKING ==========
   Booking: a.model({
-    customerId: a.id().required(),
+    customerId: a.id(),
     customer: a.belongsTo('User', 'customerId'),
     vehicleId: a.id().required(),
     serviceType: a.enum([
@@ -58,8 +58,9 @@ const schema = a.schema({
     serviceOrder: a.hasOne('ServiceOrder', 'bookingId'),
   })
     .authorization((allow) => [
-      allow.owner(),
-      allow.groups(['admin', 'engineer']).to(['read', 'update']),
+      allow.ownerDefinedIn('customerId'),
+      allow.authenticated().to(['read']),
+      allow.groups(['admin', 'engineer']).to(['read', 'create', 'update']),
     ]),
 
   // ========== SERVICE ORDER ==========
@@ -75,8 +76,8 @@ const schema = a.schema({
     stageUpdates: a.hasMany('StageUpdate', 'serviceOrderId'),
   })
     .authorization((allow) => [
+      allow.authenticated().to(['read']),
       allow.groups(['admin', 'engineer']).to(['read', 'create', 'update']),
-      allow.groups(['customer']).to(['read']),
     ]),
 
   // ========== STAGE UPDATE ==========
@@ -89,13 +90,13 @@ const schema = a.schema({
     notes: a.string(),
   })
     .authorization((allow) => [
+      allow.authenticated().to(['read']),
       allow.groups(['admin', 'engineer']).to(['read', 'create']),
-      allow.groups(['customer']).to(['read']),
     ]),
 
   // ========== NOTIFICATION ==========
   Notification: a.model({
-    userId: a.id().required(),
+    userId: a.id(),
     serviceOrderId: a.id(),
     type: a.string().required(),
     title: a.string().required(),
@@ -104,7 +105,7 @@ const schema = a.schema({
     isRead: a.boolean().default(false),
   })
     .authorization((allow) => [
-      allow.owner(),
+      allow.ownerDefinedIn('userId'),
       allow.groups(['admin']).to(['read', 'create']),
     ]),
 

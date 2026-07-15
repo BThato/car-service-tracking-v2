@@ -33,13 +33,21 @@ function ServiceOrderPage() {
 
   const advanceStage = async () => {
     if (!order) return;
+    const serviceType = order.serviceType || 'other';
+    const nextStage = getNextStage(serviceType, order.currentStage);
+    if (!nextStage) return;
+
     try {
-      await client.mutations.advanceStage({
-        serviceOrderId: order.id,
-        notes: notes || undefined,
-      });
+      const updateData: any = { id: order.id, currentStage: nextStage };
+      if (nextStage === 'completed') {
+        updateData.completedAt = new Date().toISOString();
+      }
+      if (order.currentStage === 'queued') {
+        updateData.startedAt = new Date().toISOString();
+      }
+      await client.models.ServiceOrder.update(updateData);
       setNotes('');
-      setSuccess(`Stage advanced successfully`);
+      setSuccess(`Stage advanced to ${nextStage.replace(/_/g, ' ')}`);
       loadOrder();
       setTimeout(() => setSuccess(''), 3000);
     } catch (error) {

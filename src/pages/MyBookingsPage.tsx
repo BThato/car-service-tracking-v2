@@ -11,6 +11,18 @@ function MyBookingsPage() {
 
   useEffect(() => { loadBookings(); }, []);
 
+  // Real-time updates
+  useEffect(() => {
+    const sub = client.models.Booking.observeQuery().subscribe({
+      next: ({ items }) => {
+        setBookings(items);
+        setLoading(false);
+      },
+      error: (err) => console.error('Booking subscription error:', err),
+    });
+    return () => sub.unsubscribe();
+  }, []);
+
   const loadBookings = async () => {
     try {
       const { data } = await client.models.Booking.list();

@@ -14,27 +14,104 @@ const SERVICE_STAGES: Record<string, string[]> = {
   other: ['queued', 'assessment', 'in_progress', 'quality_check', 'completed'],
 };
 
+function getNextStage(serviceType: string, currentStage: string): string | null {
+  const stages = SERVICE_STAGES[serviceType] || SERVICE_STAGES.other;
+  const idx = stages.indexOf(currentStage);
+  if (idx === -1 || idx >= stages.length - 1) return null;
+  return stages[idx + 1];
+}
+
 export const handler: AppSyncResolverHandler<
   { serviceOrderId: string; notes?: string },
   any
 > = async (event) => {
   const { serviceOrderId, notes } = event.arguments;
+  const userId = event.identity && 'sub' in event.identity ? event.identity.sub : 'unknown';
 
-  // In a real implementation, this would:
-  // 1. Fetch the service order from DynamoDB
+  // Dynamic import to avoid esbuild bundling issues
+  const { DynamoDBClient } = await import('@aws-sdk/client-dynamodb');
+  const { DynamoDBDocumentClient, GetCommand, UpdateCommand, PutCommand } = await import('@aws-sdk/lib-dynamodb');
+
+  const ddbClient = new DynamoDBClient({});
+  const docClient = DynamoDBDocumentClient.from(ddbClient);
+
+  const serviceOrderTable = process.env.SERVICEORDER_TABLE_NAME!;
+  const bookingTable = process.env.BOOKING_TABLE_NAME!;
+  const stageUpdateTable = process.env.STAGEUPDATE_TABLE_NAME!;
+
+  // 1. Fetch the service order
+  const orderResult = await docClient.send(new GetCommand({
+    TableName: serviceOrderTable,
+    Key: { id: serviceOrderId },
+  }));
+
+  if (!orderResult.Item) {
+    throw new Error(`Service order ${serviceOrderId} not found`);
+  }
+
+  const order = orderResult.Item;
+  const currentStage = order.currentStage;
+
   // 2. Get the booking to determine service type
-  // 3. Validate the stage transition
+  const bookingResult = await docClient.send(new GetCommand({
+    TableName: bookingTable,
+    Key: { id: order.bookingId },
+  }));
+
+  const serviceType = bookingResult.Item?.serviceType || 'other';
+
+  // 3. Validate and get next stage
+  const nextStage = getNextStage(serviceType, currentStage);
+  if (!nextStage) {
+    throw new Error(`Cannot advance from stage "${currentStage}" for service type "${serviceType}"`);
+  }
+
+  const now = new Date().toISOString();
+
   // 4. Update the service order
-  // 5. Create a stage update record
-  // 6. Trigger push notification
-
-  // For now, return the structure AppSync expects
-  // The actual DynamoDB operations will be done via AppSync resolvers
-  // with this Lambda handling only the validation logic
-
-  return {
-    id: serviceOrderId,
-    currentStage: 'advanced', // Will be replaced by actual logic
-    updatedAt: new Date().toISOString(),
+  let updateExpression = 'SET currentStage = :nextStage, updatedAt = :now';
+  const expressionValues: Record<string, any> = {
+    ':nextStage': nextStage,
+    ':now': now,
   };
+
+  if (nextStage === 'completed') {
+    updateExpression += ', completedAt = :completedAt';
+    expressionValues[':completedAt'] = now;
+  }
+
+  if (currentStage === 'queued') {
+    updateExpression += ', startedAt = :startedAt';
+    expressionValues[':startedAt'] = now;
+  }
+
+  const updateResult = await docClient.send(new UpdateCommand({
+    TableName: serviceOrderTable,
+    Key: { id: serviceOrderId },
+    UpdateExpression: updateExpression,
+    ExpressionAttributeValues: expressionValues,
+    ReturnValues: 'ALL_NEW',
+  }));
+
+  // 5. Create a stage update record
+  const stageUpdateId = `${serviceOrderId}-${Date.now()}`;
+  await docClient.send(new PutCommand({
+    TableName: stageUpdateTable,
+    Item: {
+      id: stageUpdateId,
+      serviceOrderId,
+      updatedById: userId,
+      fromStage: currentStage,
+      toStage: nextStage,
+      notes: notes || null,
+      createdAt: now,
+      updatedAt: now,
+      __typename: 'StageUpdate',
+    },
+  }));
+
+  // 6. Return the updated service order
+  return updateResult.Attributes;
 };
+
+// trigger rebuild

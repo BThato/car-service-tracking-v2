@@ -9,6 +9,7 @@ import { getNextStage } from '../config/serviceStages';
 function TrackingPage() {
   const { id } = useParams<{ id: string }>();
   const [order, setOrder] = useState<any>(null);
+  const [booking, setBooking] = useState<any>(null);
   const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [role, setRole] = useState('customer');
@@ -19,38 +20,38 @@ function TrackingPage() {
     loadData();
   }, [id]);
 
-  // Subscribe to real-time updates on this service order
+  // Real-time: observe the service order for live stage updates
   useEffect(() => {
     if (!id) return;
 
-    const sub = client.models.ServiceOrder.onUpdate({
+    const sub = client.models.ServiceOrder.observeQuery({
       filter: { id: { eq: id } },
     }).subscribe({
-      next: (updatedOrder) => {
-        setOrder((prev: any) => prev ? { ...prev, ...updatedOrder } : updatedOrder);
-        loadHistory();
+      next: ({ items }) => {
+        if (items.length > 0) {
+          setOrder(items[0]);
+        }
       },
-      error: (err) => console.error('Subscription error:', err),
+      error: (err) => console.error('ServiceOrder observe error:', err),
     });
 
     return () => sub.unsubscribe();
   }, [id]);
 
-  // Subscribe to new stage updates for this order
+  // Real-time: observe stage updates for this order
   useEffect(() => {
     if (!id) return;
 
-    const sub = client.models.StageUpdate.onCreate({
+    const sub = client.models.StageUpdate.observeQuery({
       filter: { serviceOrderId: { eq: id } },
     }).subscribe({
-      next: (newUpdate) => {
-        setHistory(prev => [newUpdate, ...prev]);
-        // Update the order's current stage from the new update
-        if (newUpdate.toStage) {
-          setOrder((prev: any) => prev ? { ...prev, currentStage: newUpdate.toStage } : prev);
-        }
+      next: ({ items }) => {
+        const sorted = [...items].sort((a: any, b: any) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+        setHistory(sorted);
       },
-      error: (err) => console.error('StageUpdate subscription error:', err),
+      error: (err) => console.error('StageUpdate observe error:', err),
     });
 
     return () => sub.unsubscribe();
@@ -64,7 +65,12 @@ function TrackingPage() {
       ]);
       setRole(attrs['custom:role'] || 'customer');
       setOrder(orderRes.data);
-      await loadHistory();
+
+      // Fetch the related booking for service type info
+      if (orderRes.data?.bookingId) {
+        const bookingRes = await client.models.Booking.get({ id: orderRes.data.bookingId });
+        setBooking(bookingRes.data);
+      }
     } catch (error) {
       console.error('Failed to load tracking data:', error);
     } finally {
@@ -72,39 +78,25 @@ function TrackingPage() {
     }
   };
 
-  const loadHistory = async () => {
-    try {
-      const { data } = await client.models.StageUpdate.list({
-        filter: { serviceOrderId: { eq: id! } },
-      });
-      // Sort by createdAt descending
-      const sorted = (data || []).sort((a: any, b: any) =>
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
-      setHistory(sorted);
-    } catch (error) {
-      console.error('Failed to load history:', error);
-    }
-  };
-
   const handleAdvanceStage = async () => {
     if (!order) return;
-    const nextStage = getNextStage(order.serviceType || 'other', order.currentStage);
+    const serviceType = booking?.serviceType || 'other';
+    const nextStage = getNextStage(serviceType, order.currentStage);
     if (!nextStage) return;
 
     setAdvancing(true);
     try {
-      // Use custom mutation for stage advancement (handles validation)
-      await client.mutations.advanceStage({
-        serviceOrderId: order.id,
-        notes: advanceNotes || undefined,
-      });
+      const updateData: any = { id: order.id, currentStage: nextStage };
+      if (nextStage === 'completed') {
+        updateData.completedAt = new Date().toISOString();
+      }
+      if (order.currentStage === 'queued') {
+        updateData.startedAt = new Date().toISOString();
+      }
+      await client.models.ServiceOrder.update(updateData);
       setAdvanceNotes('');
-      // Subscription will handle UI update
     } catch (error) {
       console.error('Failed to advance stage:', error);
-      // Fallback: reload manually
-      loadData();
     } finally {
       setAdvancing(false);
     }
@@ -113,7 +105,7 @@ function TrackingPage() {
   if (loading) return <LoadingSpinner message="Loading service details..." />;
   if (!order) return <div className="alert alert-error">Service order not found.</div>;
 
-  const serviceType = order.serviceType || 'other';
+  const serviceType = booking?.serviceType || 'other';
   const isEngineer = role === 'engineer' || role === 'admin';
 
   return (
@@ -127,7 +119,7 @@ function TrackingPage() {
 
       {/* Order Info */}
       <div className="card">
-        <h3>Service Order</h3>
+        <h3>{serviceType.replace(/_/g, ' ')}</h3>
         <p>Current Stage: <strong>{(order.currentStage || '').replace(/_/g, ' ')}</strong></p>
         {order.notes && <p>Notes: {order.notes}</p>}
         {order.startedAt && <p>Started: {new Date(order.startedAt).toLocaleString()}</p>}

@@ -1,6 +1,5 @@
 import { useState, useEffect, FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getCurrentUser } from 'aws-amplify/auth';
 import { client } from '../client';
 
 function BookingPage() {
@@ -37,9 +36,7 @@ function BookingPage() {
     setIsLoading(true);
 
     try {
-      const { userId } = await getCurrentUser();
       await client.models.Booking.create({
-        customerId: userId,
         vehicleId: formData.vehicleId,
         serviceType: formData.serviceType as any,
         description: formData.description || undefined,

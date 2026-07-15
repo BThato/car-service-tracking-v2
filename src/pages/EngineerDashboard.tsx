@@ -14,20 +14,33 @@ function EngineerDashboard() {
 
   useEffect(() => { loadData(); }, []);
 
+  // Real-time: observe bookings so new ones appear instantly
+  useEffect(() => {
+    const sub = client.models.Booking.observeQuery().subscribe({
+      next: ({ items }) => {
+        const pending = items.filter((b: any) => b.status === 'pending');
+        setPendingBookings(pending);
+      },
+      error: (err) => console.error('Booking observe error:', err),
+    });
+    return () => sub.unsubscribe();
+  }, []);
+
+  // Real-time: observe service orders
+  useEffect(() => {
+    const sub = client.models.ServiceOrder.observeQuery().subscribe({
+      next: ({ items }) => {
+        setOrders(items);
+      },
+      error: (err) => console.error('ServiceOrder observe error:', err),
+    });
+    return () => sub.unsubscribe();
+  }, []);
+
   const loadData = async () => {
     try {
       const { userId } = await getCurrentUser();
       setCurrentUserId(userId);
-
-      const [ordersRes, bookingsRes] = await Promise.all([
-        client.models.ServiceOrder.list(),
-        client.models.Booking.list({
-          filter: { status: { eq: 'pending' } },
-        }),
-      ]);
-
-      setOrders(ordersRes.data || []);
-      setPendingBookings(bookingsRes.data || []);
     } catch (error) {
       console.error('Failed to load data:', error);
     } finally {
@@ -49,7 +62,7 @@ function EngineerDashboard() {
         id: bookingId,
         status: 'confirmed' as any,
       });
-      loadData();
+      // observeQuery handles UI update automatically
     } catch (error) {
       console.error('Failed to accept booking:', error);
     } finally {
@@ -64,7 +77,7 @@ function EngineerDashboard() {
         id: orderId,
         assignedEngineerId: currentUserId,
       });
-      loadData();
+      // observeQuery handles UI update automatically
     } catch (error) {
       console.error('Failed to assign job:', error);
     } finally {
@@ -78,10 +91,15 @@ function EngineerDashboard() {
 
     setUpdating(orderId);
     try {
-      await client.mutations.advanceStage({
-        serviceOrderId: orderId,
-      });
-      loadData();
+      const updateData: any = { id: orderId, currentStage: nextStage };
+      if (nextStage === 'completed') {
+        updateData.completedAt = new Date().toISOString();
+      }
+      if (currentStage === 'queued') {
+        updateData.startedAt = new Date().toISOString();
+      }
+      await client.models.ServiceOrder.update(updateData);
+      // observeQuery handles UI update automatically
     } catch (error) {
       console.error('Failed to update stage:', error);
     } finally {

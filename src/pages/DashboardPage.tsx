@@ -16,21 +16,37 @@ function DashboardPage() {
     loadUserAndData();
   }, []);
 
+  // Real-time subscription for service order updates
+  useEffect(() => {
+    const sub = client.models.ServiceOrder.observeQuery().subscribe({
+      next: ({ items }) => {
+        setServiceOrders(items);
+      },
+      error: (err) => console.error('ServiceOrder subscription error:', err),
+    });
+
+    return () => sub.unsubscribe();
+  }, []);
+
+  // Real-time subscription for booking updates
+  useEffect(() => {
+    const sub = client.models.Booking.observeQuery().subscribe({
+      next: ({ items }) => {
+        setBookings(items);
+      },
+      error: (err) => console.error('Booking subscription error:', err),
+    });
+
+    return () => sub.unsubscribe();
+  }, []);
+
   const loadUserAndData = async () => {
     try {
       const attrs = await fetchUserAttributes();
       setFirstName(attrs.given_name || '');
       setRole(attrs['custom:role'] || 'customer');
-
-      const [ordersRes, bookingsRes] = await Promise.all([
-        client.models.ServiceOrder.list(),
-        client.models.Booking.list(),
-      ]);
-
-      setServiceOrders(ordersRes.data || []);
-      setBookings(bookingsRes.data || []);
     } catch (error) {
-      console.error('Failed to load dashboard data:', error);
+      console.error('Failed to load user data:', error);
     } finally {
       setLoading(false);
     }
@@ -48,6 +64,12 @@ function DashboardPage() {
 
   const activeOrders = serviceOrders.filter(o => o.currentStage !== 'completed');
 
+  // Build a map of bookingId -> serviceType for stage tracker
+  const bookingServiceTypeMap: Record<string, string> = {};
+  bookings.forEach(b => {
+    bookingServiceTypeMap[b.id] = b.serviceType || 'other';
+  });
+
   return (
     <div className="dashboard-page page-loaded">
       <div className="page-header">
@@ -63,16 +85,19 @@ function DashboardPage() {
           <p className="empty-state">No active services at the moment.</p>
         ) : (
           <div className="card-grid">
-            {activeOrders.map(order => (
-              <Link to={`/tracking/${order.id}`} key={order.id} className="card">
-                <div className="card-header">
-                  <h3>Service Order</h3>
-                  <span className={`priority-badge priority-${order.priority || 'normal'}`}>{order.priority || 'normal'}</span>
-                </div>
-                <p className="card-subtitle">Stage: {order.currentStage?.replace(/_/g, ' ')}</p>
-                <StageTracker currentStage={order.currentStage || 'queued'} serviceType="other" compact />
-              </Link>
-            ))}
+            {activeOrders.map(order => {
+              const serviceType = bookingServiceTypeMap[order.bookingId] || 'other';
+              return (
+                <Link to={`/tracking/${order.id}`} key={order.id} className="card">
+                  <div className="card-header">
+                    <h3>{serviceType.replace(/_/g, ' ')}</h3>
+                    <span className={`priority-badge priority-${order.priority || 'normal'}`}>{order.priority || 'normal'}</span>
+                  </div>
+                  <p className="card-subtitle">Stage: {(order.currentStage || '').replace(/_/g, ' ')}</p>
+                  <StageTracker currentStage={order.currentStage || 'queued'} serviceType={serviceType} compact />
+                </Link>
+              );
+            })}
           </div>
         )}
       </section>

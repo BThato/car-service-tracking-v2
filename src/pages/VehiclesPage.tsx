@@ -1,5 +1,4 @@
 import { useState, useEffect, FormEvent } from 'react';
-import { getCurrentUser } from 'aws-amplify/auth';
 import { client } from '../client';
 import LoadingSpinner from '../components/LoadingSpinner';
 
@@ -34,7 +33,6 @@ function VehiclesPage() {
     setError('');
 
     try {
-      const { userId } = await getCurrentUser();
       await client.models.Vehicle.create({
         make: formData.make,
         model: formData.model,
@@ -43,7 +41,6 @@ function VehiclesPage() {
         vin: formData.vin || undefined,
         color: formData.color || undefined,
         mileage: formData.mileage ? parseInt(formData.mileage) : undefined,
-        ownerId: userId,
       });
       setShowForm(false);
       setFormData({ make: '', model: '', year: '', licensePlate: '', vin: '', color: '', mileage: '' });
