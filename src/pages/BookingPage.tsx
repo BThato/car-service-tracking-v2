@@ -1,5 +1,5 @@
 import { useState, useEffect, FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { client } from '../client';
 
 function BookingPage() {
@@ -58,7 +58,7 @@ function BookingPage() {
 
       {vehicles.length === 0 ? (
         <div className="alert alert-info">
-          You need to add a vehicle first. <a href="/vehicles">Add Vehicle</a>
+          You need to add a vehicle first. <Link to="/vehicles">Add Vehicle</Link>
         </div>
       ) : (
         <form onSubmit={handleSubmit} className="booking-form">
