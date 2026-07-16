@@ -78,7 +78,10 @@ function EngineerDashboard() {
         id: bookingId,
         status: 'confirmed' as any,
       });
-      // observeQuery handles UI update automatically
+      // Immediately update local state so it disappears from pending
+      setAllBookings(prev => prev.map(b =>
+        b.id === bookingId ? { ...b, status: 'confirmed' } : b
+      ));
     } catch (error) {
       console.error('Failed to accept booking:', error);
     } finally {
