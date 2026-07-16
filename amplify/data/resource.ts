@@ -58,9 +58,7 @@ const schema = a.schema({
     serviceOrder: a.hasOne('ServiceOrder', 'bookingId'),
   })
     .authorization((allow) => [
-      allow.ownerDefinedIn('customerId'),
-      allow.authenticated().to(['read']),
-      allow.groups(['admin', 'engineer']).to(['read', 'create', 'update']),
+      allow.authenticated(),
     ]),
 
   // ========== SERVICE ORDER ==========
@@ -76,8 +74,7 @@ const schema = a.schema({
     stageUpdates: a.hasMany('StageUpdate', 'serviceOrderId'),
   })
     .authorization((allow) => [
-      allow.authenticated().to(['read']),
-      allow.groups(['admin', 'engineer']).to(['read', 'create', 'update']),
+      allow.authenticated(),
     ]),
 
   // ========== STAGE UPDATE ==========
@@ -90,8 +87,7 @@ const schema = a.schema({
     notes: a.string(),
   })
     .authorization((allow) => [
-      allow.authenticated().to(['read']),
-      allow.groups(['admin', 'engineer']).to(['read', 'create']),
+      allow.authenticated(),
     ]),
 
   // ========== NOTIFICATION ==========
