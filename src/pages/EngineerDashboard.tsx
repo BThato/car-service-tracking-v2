@@ -36,6 +36,23 @@ function EngineerDashboard() {
     return () => sub.unsubscribe();
   }, []);
 
+  // Polling fallback: refresh every 10 seconds in case subscriptions miss events
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        const [bookingsRes, ordersRes] = await Promise.all([
+          client.models.Booking.list(),
+          client.models.ServiceOrder.list(),
+        ]);
+        setAllBookings(bookingsRes.data || []);
+        setOrders(ordersRes.data || []);
+      } catch (err) {
+        // Silent fail for polling
+      }
+    }, 10000);
+    return () => clearInterval(interval);
+  }, []);
+
   const loadData = async () => {
     try {
       const { userId } = await getCurrentUser();

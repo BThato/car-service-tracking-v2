@@ -41,6 +41,23 @@ function DashboardPage() {
     return () => sub.unsubscribe();
   }, []);
 
+  // Polling fallback every 10s
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        const [ordersRes, bookingsRes] = await Promise.all([
+          client.models.ServiceOrder.list(),
+          client.models.Booking.list(),
+        ]);
+        setServiceOrders(ordersRes.data || []);
+        setBookings(bookingsRes.data || []);
+      } catch (err) {
+        // Silent fail
+      }
+    }, 10000);
+    return () => clearInterval(interval);
+  }, []);
+
   const loadUserAndData = async () => {
     try {
       const attrs = await fetchUserAttributes();
