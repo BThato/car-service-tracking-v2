@@ -45,14 +45,25 @@ function ServiceOrderPage() {
     if (!nextStage) return;
 
     try {
+      const currentStage = order.currentStage;
       const updateData: any = { id: order.id, currentStage: nextStage };
       if (nextStage === 'completed') {
         updateData.completedAt = new Date().toISOString();
       }
-      if (order.currentStage === 'queued') {
+      if (currentStage === 'queued') {
         updateData.startedAt = new Date().toISOString();
       }
       await client.models.ServiceOrder.update(updateData);
+
+      // Create a StageUpdate record for history
+      await client.models.StageUpdate.create({
+        serviceOrderId: order.id,
+        updatedById: 'engineer',
+        fromStage: currentStage,
+        toStage: nextStage,
+        notes: notes || undefined,
+      });
+
       setNotes('');
       setSuccess(`Stage advanced to ${nextStage.replace(/_/g, ' ')}`);
       loadOrder();

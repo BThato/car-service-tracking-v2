@@ -86,19 +86,29 @@ function TrackingPage() {
 
     setAdvancing(true);
     try {
+      const currentStage = order.currentStage;
       const updateData: any = { id: order.id, currentStage: nextStage };
       if (nextStage === 'completed') {
         updateData.completedAt = new Date().toISOString();
       }
-      if (order.currentStage === 'queued') {
+      if (currentStage === 'queued') {
         updateData.startedAt = new Date().toISOString();
       }
       const result = await client.models.ServiceOrder.update(updateData);
       if (result.errors) {
         console.error('Update errors:', result.errors);
       }
+
+      // Create a StageUpdate record for history
+      await client.models.StageUpdate.create({
+        serviceOrderId: order.id,
+        updatedById: 'engineer',
+        fromStage: currentStage,
+        toStage: nextStage,
+        notes: advanceNotes || undefined,
+      });
+
       setAdvanceNotes('');
-      // Refresh data in case observeQuery doesn't pick it up immediately
       loadData();
     } catch (error) {
       console.error('Failed to advance stage:', error);

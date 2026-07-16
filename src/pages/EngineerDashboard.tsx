@@ -98,7 +98,14 @@ function EngineerDashboard() {
         updateData.startedAt = new Date().toISOString();
       }
       await client.models.ServiceOrder.update(updateData);
-      // observeQuery handles UI update automatically
+
+      // Create a StageUpdate record for history
+      await client.models.StageUpdate.create({
+        serviceOrderId: orderId,
+        updatedById: currentUserId || 'engineer',
+        fromStage: currentStage,
+        toStage: nextStage,
+      });
     } catch (error) {
       console.error('Failed to update stage:', error);
     } finally {
